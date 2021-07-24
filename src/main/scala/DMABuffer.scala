@@ -7,28 +7,48 @@ import ee290cdma.EE290CDMAWriterReq
 // Takes 32bit inputs (from AES core) and writes to DMA
 class DMAInputBuffer (addrBits: Int = 32, beatBytes: Int) extends Module {
   val io = IO(new Bundle {
-    val baseAddr = Flipped(Decoupled(UInt(addrBits.W)))
-    val dataIn  = Flipped(Decoupled(UInt(32.W)))
+    val baseAddr = Flipped(Decoupled(UInt(addrBits.W)))//valid是Bool型输入；bits是UInt型，addrBits输入，bits是参数；ready是布尔型输出
+    val dataIn  = Flipped(Decoupled(UInt(32.W)))//valid是Bool型输入，
     val dmaOutput = Decoupled(new EE290CDMAWriterReq(addrBits, beatBytes))
     val done = Output(Bool())
   })
-
-  val bitsFilled = RegInit(0.U(log2Ceil(128 + 1).W))
+  
+/*
+  class EE290CDMAWriterReq(val addrBits: Int, val beatBytes: Int) extends Bundle {
+  val addr = UInt(addrBits.W)
+  val data = UInt((beatBytes * 8).W)
+  val totalBytes = UInt(log2Ceil(beatBytes + 1).W)
+}
+*/
+/*
+class ControllerDMAIO (addrBits: Int, beatBytes: Int)(implicit p: Parameters) extends Bundle {
+  val writeReq       = Decoupled(new EE290CDMAWriterReq(addrBits, beatBytes))
+  val readReq        = Decoupled(new EE290CDMAReaderReq(addrBits, 256))  // Hardcoded due to 256b key and 128b blocks
+  val readResp       = Flipped(Decoupled(new EE290CDMAReaderResp(256)))
+  val readRespQueue  = Flipped(Decoupled(UInt((beatBytes * 8).W)))
+  val busy           = Input(Bool())
+}
+*/
+  val bitsFilled = RegInit(0.U(log2Ceil(256 + 1).W))
   val addrReg = RegInit(0.U(addrBits.W))
-  val wideData = RegInit(0.U(128.W)) // AES data block size is 128b
-  // AES core outputs 32 bits at a time
-  val dataQueue = Module(new Queue(UInt(32.W), 4))
-  // Signal when to start writing to DMA (ensure that all 128b of data is correctly matched to address)
+  val wideData = RegInit(0.U(256.W)) // zte data block size is 256b
+  // 暂时假设：buffer outputs 32 bits at a time？问学长
+  val dataQueue = Module(new Queue(UInt(32.W), 8))
+  // Signal when to start writing to DMA (ensure that all 256b of data is correctly matched to address)
   val startWrite = RegInit(false.B)
   // Delay done by a cycle to account for request to propagate to DMA
+  val doneReg = RegInit(false.B)
+  /*
+  val doneReg = RegInit(false.B)
   val doneReg = RegInit(false.B)
   // Data to-be-reversed
   val toReverse = Wire(UInt(32.W))
   // Data with bytes reversed
   val reverse = Wire(UInt(32.W))
+  */
 
   // Start writing when we have an entire block of data (128b)
-  when (bitsFilled === 128.U) {
+  when (bitsFilled === 256.U) {
     startWrite := true.B
   } .elsewhen (bitsFilled === 0.U) {
     startWrite := false.B
